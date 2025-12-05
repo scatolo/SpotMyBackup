@@ -271,23 +271,56 @@
             setTimeout(refreshProgress, 1000);
         }
 
+        function generateRandomString(length) {
+            var text = "";
+            var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            for (var i = 0; i < length; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return text;
+        }
+
+        async function generateCodeChallenge(codeVerifier) {
+            function base64encode(string) {
+                return btoa(String.fromCharCode.apply(null, new Uint8Array(string)))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
+            }
+
+            const encoder = new TextEncoder();
+            const data = encoder.encode(codeVerifier);
+            const digest = await window.crypto.subtle.digest('SHA-256', data);
+
+            return base64encode(digest);
+        }
+
         function login() {
             var width = 480, height = 640;
             var left = (screen.width / 2) - (width / 2);
             var top = (screen.height / 2) - (height / 2);
 
-            var set = {
-                client_id: conf.client_id,
-                redirect_uri: conf.redirect_uri,
-                scope: 'user-read-private user-read-email playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-library-read user-library-modify',
-                response_type: 'token',
-                show_dialog: 'true'
-            };
-            authWindow = window.open(
-                "https://accounts.spotify.com/authorize?" + urlEncodeSet(set),
-                "Spotify",
-                'menubar=no,location=no,resizable=no,scrollbars=no,status=no, width=' + width + ', height=' + height + ', top=' + top + ', left=' + left
-            );
+            var codeVerifier = generateRandomString(128);
+
+            generateCodeChallenge(codeVerifier).then(function (codeChallenge) {
+                localStorage.setItem('spotify_code_verifier', codeVerifier);
+
+                var set = {
+                    client_id: conf.client_id,
+                    redirect_uri: conf.redirect_uri,
+                    scope: 'user-read-private user-read-email playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-library-read user-library-modify',
+                    response_type: 'code',
+                    show_dialog: 'true',
+                    code_challenge_method: 'S256',
+                    code_challenge: codeChallenge
+                };
+
+                authWindow = window.open(
+                    "https://accounts.spotify.com/authorize?" + urlEncodeSet(set),
+                    "Spotify",
+                    'menubar=no,location=no,resizable=no,scrollbars=no,status=no, width=' + width + ', height=' + height + ', top=' + top + ', left=' + left
+                );
+            });
         }
 
         function authCallback(event) {
@@ -299,7 +332,34 @@
             if (authWindow) {
                 authWindow.close();
             }
-            handleAuth(event.data);
+
+            var data = event.data;
+            if (data.type === 'code') {
+                var code = data.code;
+                var codeVerifier = localStorage.getItem('spotify_code_verifier');
+
+                $.ajax({
+                    method: "POST",
+                    url: "https://accounts.spotify.com/api/token",
+                    data: {
+                        client_id: conf.client_id,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: conf.redirect_uri,
+                        code_verifier: codeVerifier
+                    },
+                    success: function (response) {
+                        handleAuth(response.access_token);
+                    },
+                    fail: function (jqXHR, textStatus, errorThrown) {
+                        console.error("Token exchange failed", errorThrown);
+                        alert("Failed to login: " + textStatus);
+                    }
+                });
+            } else if (data.type === 'error') {
+                console.error("Auth error", data.error);
+                alert("Authentication failed: " + data.error);
+            }
         }
 
         function urlEncodeSet(set) {
