@@ -1,7 +1,7 @@
 config = {
 "uri":"https://spotmybackupstab.vercel.app",
 "redirect_uri":"https://spotmybackupstab.vercel.app/login.html",
-"client_id":"479ff759d9174598b8263786c0772c96",
+"client_id":"6bed5f6b136d4f3699254b8ca23781f3",
 "slowdown_import": 100,
 "slowdown_export": 100
 };
