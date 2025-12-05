@@ -11,18 +11,20 @@
 
 		window.onload = function () {
 			var target = window.self === window.top ? window.opener : window.parent;
-			var hash = window.location.hash;
-			if (hash) {
+			var search = window.location.search;
+			if (search) {
 				var params = {};
-				hash.substring(1).split('&').forEach(function (part) {
+				search.substring(1).split('&').forEach(function (part) {
 					var keyVal = part.split('=');
 					if (keyVal.length === 2) {
 						params[keyVal[0]] = decodeURIComponent(keyVal[1]);
 					}
 				});
-				var token = params.access_token;
-				if (token) {
-					target.postMessage(token, conf.uri);
+				var code = params.code;
+				if (code) {
+					target.postMessage({ type: 'code', code: code }, conf.uri);
+				} else if (params.error) {
+					target.postMessage({ type: 'error', error: params.error }, conf.uri);
 				}
 			}
 		}
